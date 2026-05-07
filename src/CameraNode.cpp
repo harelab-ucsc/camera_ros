@@ -679,7 +679,19 @@ CameraNode::process(libcamera::Request *const request)
 
       if (format_type(cfg.pixelFormat) == FormatType::RAW) {
         // raw uncompressed image
-        assert(buffer_info[buffer].size == bytesused);
+        if (bytesused == 0) {
+          RCLCPP_ERROR_STREAM(get_logger(),
+            "frame dropped: bytesused=0 — DMA buffer empty (sensor not ready,"
+            " I2C init failure, or hardware fault)");
+          goto requeue;
+        }
+        if (buffer_info[buffer].size != bytesused) {
+          RCLCPP_ERROR_STREAM(get_logger(),
+            "frame dropped: bytesused=" << bytesused
+            << " != expected=" << buffer_info[buffer].size
+            << " — partial DMA transfer");
+          goto requeue;
+        }
         msg_img->header = hdr;
         msg_img->width = cfg.size.width;
         msg_img->height = cfg.size.height;
@@ -728,6 +740,7 @@ CameraNode::process(libcamera::Request *const request)
       RCLCPP_ERROR_STREAM(get_logger(), "request '" << request->toString() << "' cancelled");
     }
 
+    requeue:
     // redeclare implicitly undeclared parameters
     parameter_handler.redeclare();
 
