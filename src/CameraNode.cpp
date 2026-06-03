@@ -521,6 +521,13 @@ CameraNode::CameraNode(const rclcpp::NodeOptions &options)
 
   parameter_handler.declare(camera->controls());
 
+  // Readable parameters that mirror the AE-settled ExposureTime and
+  // AnalogueGain reported in each frame's request metadata.  Updated every
+  // frame so that external nodes (e.g. auto_cal) can call GetParameters to
+  // read the value the IPA actually used, regardless of AeEnable state.
+  declare_parameter<int64_t>("ae_exposure_time_us", 0);
+  declare_parameter<double>("ae_analogue_gain", 1.0);
+
   // allocate stream buffers and create one request per buffer
   stream = scfg.stream();
 
@@ -656,10 +663,10 @@ CameraNode::process(libcamera::Request *const request)
       std_msgs::msg::Header hdr;
       hdr.frame_id = frame_id;
 
-      // if using sensor timestamps, get the sensor timestamp from the request metadata
+      const libcamera::ControlList &req_metadata = request->metadata();
+
       int64_t sensor_latency = 0;
       if (!use_node_time) {
-        const libcamera::ControlList &req_metadata = request->metadata();
         if (const std::optional<int64_t> sensor_ts = req_metadata.get(libcamera::controls::SensorTimestamp)) {
           sensor_latency = rclcpp::Clock(RCL_STEADY_TIME).now().nanoseconds() - sensor_ts.value();
         }
@@ -667,6 +674,15 @@ CameraNode::process(libcamera::Request *const request)
           RCLCPP_WARN_STREAM_ONCE(get_logger(), "sensor timestamp not available, falling back to node time as reference");
         }
       }
+
+      // Echo AE-settled controls from frame metadata into readable parameters.
+      // These reflect what the IPA actually applied this frame, whether AE is
+      // enabled or locked.  External nodes read these via GetParameters to
+      // retrieve the settled exposure without needing custom message types.
+      if (const auto exp = req_metadata.get(libcamera::controls::ExposureTime))
+        set_parameter(rclcpp::Parameter("ae_exposure_time_us", static_cast<int64_t>(exp.value())));
+      if (const auto gain = req_metadata.get(libcamera::controls::AnalogueGain))
+        set_parameter(rclcpp::Parameter("ae_analogue_gain", static_cast<double>(gain.value())));
 
       // Adjust timestamp by the sensor latency
       hdr.stamp = this->now() - rclcpp::Duration::from_nanoseconds(sensor_latency);
