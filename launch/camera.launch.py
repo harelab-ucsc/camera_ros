@@ -27,7 +27,7 @@ def generate_launch_description() -> LaunchDescription:
     camera_launch_arg = DeclareLaunchArgument(
         camera_param_name,
         default_value=camera_param_default,
-        description="camera ID or name"
+        description="camera ID or name",
     )
 
     format_param_name = "format"
@@ -39,21 +39,23 @@ def generate_launch_description() -> LaunchDescription:
     format_launch_arg = DeclareLaunchArgument(
         format_param_name,
         default_value=format_param_default,
-        description="pixel format"
+        description="pixel format",
     )
 
     # camera node
     composable_nodes = [
         ComposableNode(
-            package='camera_ros',
-            plugin='camera::CameraNode',
-            parameters=[{
-                "camera": camera_param,
-                "width": 640,
-                "height": 480,
-                "format": format_param,
-            }],
-            extra_arguments=[{'use_intra_process_comms': True}],
+            package="camera_ros",
+            plugin="camera::CameraNode",
+            parameters=[
+                {
+                    "camera": camera_param,
+                    "width": 640,
+                    "height": 480,
+                    "format": format_param,
+                }
+            ],
+            extra_arguments=[{"use_intra_process_comms": True}],
         ),
     ]
 
@@ -61,24 +63,26 @@ def generate_launch_description() -> LaunchDescription:
     if has_resource("packages", "image_view"):
         composable_nodes += [
             ComposableNode(
-                package='image_view',
-                plugin='image_view::ImageViewNode',
-                remappings=[('/image', '/camera/image_raw')],
-                extra_arguments=[{'use_intra_process_comms': True}],
+                package="image_view",
+                plugin="image_view::ImageViewNode",
+                remappings=[("/image", "/camera/image_raw")],
+                extra_arguments=[{"use_intra_process_comms": True}],
             ),
         ]
 
     # composable nodes in single container
     container = ComposableNodeContainer(
-        name='camera_container',
-        namespace='',
-        package='rclcpp_components',
-        executable='component_container',
+        name="camera_container",
+        namespace="",
+        package="rclcpp_components",
+        executable="component_container",
         composable_node_descriptions=composable_nodes,
     )
 
-    return LaunchDescription([
-        container,
-        camera_launch_arg,
-        format_launch_arg,
-    ])
+    return LaunchDescription(
+        [
+            container,
+            camera_launch_arg,
+            format_launch_arg,
+        ]
+    )
